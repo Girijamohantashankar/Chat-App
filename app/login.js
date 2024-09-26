@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -20,6 +21,8 @@ export default function Login() {
                 email,
                 password,
             });
+            const token = response.data.token;            
+            await AsyncStorage.setItem('authToken', token);
             setMessage(response.data.message || 'Login successful');
             setMessageType('success');
             setLoading(false);

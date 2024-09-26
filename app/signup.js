@@ -4,7 +4,9 @@ import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator } from 're
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 
+
 export default function Signup() {
+    const [userName, setUserName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -23,11 +25,12 @@ export default function Signup() {
         setIsLoading(true); 
         try {
             const response = await axios.post('http://localhost:5000/api/auth/signup', {
+                userName,
                 email,
                 password,
             });
             const token = response.data.token;            
-            await AsyncStorage.setItem('authToken', token);
+            // await AsyncStorage.setItem('authToken', token);
             setMessage(response.data.message);
             setMessageType('success');
             setIsLoading(false); 
@@ -43,6 +46,12 @@ export default function Signup() {
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Signup</Text>
+            <TextInput
+                style={styles.input}
+                placeholder="Username"
+                value={userName}
+                onChangeText={setUserName}
+            />
             <TextInput
                 style={styles.input}
                 placeholder="Email"

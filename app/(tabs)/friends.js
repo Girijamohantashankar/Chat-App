@@ -1,50 +1,107 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { FontAwesome } from '@expo/vector-icons';
 import axios from 'axios';
-import Header from '../Header'; // Adjust path as needed
+import Header from '../Header';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Friends() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [authToken, setAuthToken] = useState('');
+  const [friendRequests, setFriendRequests] = useState({});
 
-  // Fetch users from the API when the component mounts
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchToken = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/friends'); // Adjust the URL to match your backend
-        setUsers(response.data);
-        setLoading(false);
+        const token = await AsyncStorage.getItem('authToken');
+        if (token) {
+          setAuthToken(token);
+        }
       } catch (error) {
-        console.error('Error fetching users:', error);
-        setLoading(false);
+        console.error('Error fetching token:', error);
       }
     };
-
-    fetchUsers();
+    fetchToken();
   }, []);
 
-  // Function to handle friend request
-  const handleFriendRequest = (userId) => {
-    // Implement friend request logic here
-    console.log(`Friend request sent to user with ID: ${userId}`);
-    // Move the user to the Requests tab or update state as needed
+  useEffect(() => {
+    if (authToken) {
+      fetchUsersAndRequests();
+    }
+  }, [authToken]);
+
+  const fetchUsersAndRequests = async () => {
+    try {
+      setLoading(true); 
+      const [usersResponse, requestsResponse] = await Promise.all([
+        axios.get('http://localhost:5000/api/friends'), 
+        axios.get('http://localhost:5000/api/friend-requests', {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }), 
+      ]);
+      setUsers(usersResponse.data);
+      const requestsMap = {};
+      requestsResponse.data.forEach((request) => {
+        if (request.receiver && request.sender) {
+          requestsMap[request.receiver._id] = request.status;
+        }
+      });
+      setFriendRequests(requestsMap);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching users or friend requests:', error);
+      setLoading(false);
+    }
   };
 
-  // Render each user item
-  const renderItem = ({ item }) => (
-    <View style={styles.userContainer}>
-      <Text style={styles.userName}>{item.name}</Text>
-      <Button title="Send Friend Request" onPress={() => handleFriendRequest(item._id)} />
-    </View>
-  );
+  const handleFriendRequest = async (userId) => {
+    try {
+      const response = await axios.post(
+        'http://localhost:5000/api/send-friend-request',
+        { receiverId: userId },
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      setFriendRequests((prev) => ({
+        ...prev,
+        [userId]: 'pending',
+      }));
+
+      alert(response.data.message);
+    } catch (error) {
+      console.error('Error sending friend request:', error);
+      alert(error.response?.data?.message || 'Something went wrong');
+    }
+  };
+
+
+  const renderItem = ({ item }) => {
+    const requestStatus = friendRequests[item._id]; 
+
+    return (
+      <View style={styles.userContainer}>
+        <FontAwesome name="user" size={24} color="#000" style={styles.icon} />
+        <Text style={styles.userName}>{item.userName}</Text>
+        {requestStatus === 'accepted' ? (
+          <Text style={styles.acceptedText}>Accepted</Text>
+        ) : requestStatus === 'pending' ? (
+          <Text style={styles.pendingText}>Pending</Text>
+        ) : (
+          <TouchableOpacity style={styles.button} onPress={() => handleFriendRequest(item._id)}>
+            <Text style={styles.buttonText}>Send Friend Request</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   return (
-    <View>
+    <View style={{ flex: 1 }}>
       <Header />
       <View style={styles.container}>
         <Text style={styles.title}>Friends</Text>
         {loading ? (
-          <Text>Loading...</Text>
+          <ActivityIndicator size="large" color="#007BFF" />
         ) : (
           <FlatList
             data={users}
@@ -76,7 +133,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#ddd',
   },
+  icon: {
+    marginRight: 10,
+    paddingBottom: 7,
+    paddingLeft: 10,
+    paddingRight: 10,
+    paddingTop: 7,
+    backgroundColor: "#ddd",
+    borderRadius: 15,
+  },
   userName: {
+    flex: 1,
     fontSize: 16,
+    color: '#333',
+  },
+  button: {
+    backgroundColor: '#007BFF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  pendingText: {
+    color: 'orange',
+    fontSize: 16,
+    marginLeft: 10,
+  },
+  acceptedText: {
+    color: 'green',
+    fontSize: 16,
+    marginLeft: 10,
   },
 });
